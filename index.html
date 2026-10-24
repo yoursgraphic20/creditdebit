@@ -3,46 +3,84 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#1a56db">
 <title>Credit Debit</title>
 <style>
-body{font-family:sans-serif;max-width:480px;margin:0 auto;padding:16px;background:#f4f6fb}
-button{padding:10px 14px;border:0;border-radius:8px;background:#1a56db;color:#fff;font-size:16px}
-input{padding:10px;margin:4px 0;width:100%;box-sizing:border-box;font-size:16px}
+*{box-sizing:border-box}
+body{font-family:sans-serif;margin:0 auto;background:#f4f6fb;max-width:520px}
+header{background:#1a56db;color:#fff;padding:14px 16px;display:flex;justify-content:space-between;align-items:center}
+main{padding:12px 12px 90px}
+button{padding:10px 14px;border:0;border-radius:8px;background:#1a56db;color:#fff;font-size:15px}
+input,select{padding:10px;margin:4px 0;width:100%;font-size:16px;border:1px solid #ccc;border-radius:8px}
 .card{background:#fff;padding:12px;border-radius:10px;margin:8px 0}
-.credit{color:green}.debit{color:red}
-.row{display:flex;justify-content:space-between;align-items:center}
-#bal{font-size:28px;font-weight:bold}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.red{color:#dc2626}.green{color:#16a34a}
+.big{font-size:24px;font-weight:bold}
+.fab{position:fixed;bottom:16px;right:16px;border-radius:30px;padding:14px 20px;box-shadow:0 2px 8px #0004}
+.grey{background:#6b7280}.rb{background:#dc2626}.gb{background:#16a34a}
+small{color:#666}
 </style>
 </head>
 <body>
-<h2>Credit Debit</h2>
+<header><b>Credit Debit</b><button id="logoutBtn" style="display:none;background:#fff3;">Logout</button></header>
+<main>
 
 <div id="login" class="card">
+  <p>Sign in to keep your ledger safe in your own account.</p>
   <button id="loginBtn">Sign in with Google</button>
 </div>
 
-<div id="app" style="display:none">
-  <div class="row"><span id="user"></span><button id="logoutBtn">Logout</button></div>
-  <div class="card">Balance<div id="bal">0</div>
-    <small>Credit: <span id="cr">0</span> | Debit: <span id="dr">0</span></small>
-  </div>
-  <div class="card">
-    <input id="name" placeholder="Name">
-    <input id="amount" type="number" placeholder="Amount">
-    <input id="note" placeholder="Note (optional)">
-    <div class="row">
-      <button id="addCredit">+ Credit</button>
-      <button id="addDebit" style="background:#dc2626">- Debit</button>
-    </div>
+<div id="home" style="display:none">
+  <div class="card row" style="text-align:center">
+    <div style="flex:1"><small>You'll get</small><div class="big green" id="get">0</div></div>
+    <div style="flex:1"><small>You'll give</small><div class="big red" id="give">0</div></div>
   </div>
   <input id="search" placeholder="Search name...">
+  <select id="catFilter"></select>
   <div id="list"></div>
+
+  <div id="addAcc" class="card" style="display:none">
+    <b>New account</b>
+    <input id="aName" placeholder="Name (customer / supplier)">
+    <input id="aPhone" placeholder="Phone with country code, e.g. 919876543210" type="tel">
+    <input id="aCat" placeholder="Category (customer, supplier, shop...)">
+    <div class="row"><button id="saveAcc">Save</button><button id="cancelAcc" class="grey">Cancel</button></div>
+  </div>
+  <button class="fab" id="newAccBtn">+ Add Account</button>
 </div>
+
+<div id="acc" style="display:none">
+  <div class="row"><button id="back" class="grey">← Back</button><button id="delAcc" class="rb">Delete account</button></div>
+  <div class="card" style="text-align:center">
+    <b id="accName"></b>
+    <div class="big" id="accBal">0</div>
+    <small id="accStatus"></small>
+    <div class="row" style="margin-top:10px">
+      <button id="call" class="grey">📞 Call</button>
+      <button id="remind" class="grey">🔔 Reminder</button>
+      <button id="export" class="grey">📄 Export</button>
+    </div>
+  </div>
+  <div class="row">
+    <button id="gaveBtn" class="rb" style="flex:1">You Gave</button>
+    <button id="gotBtn" class="gb" style="flex:1">You Got</button>
+  </div>
+  <div id="txForm" class="card" style="display:none">
+    <b id="txTitle"></b>
+    <input id="tAmount" type="number" placeholder="Amount">
+    <input id="tNote" placeholder="Note (optional)">
+    <input id="tDate" type="date">
+    <div class="row"><button id="saveTx">Save</button><button id="cancelTx" class="grey">Cancel</button></div>
+  </div>
+  <div id="txList"></div>
+</div>
+
+</main>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
-import { getFirestore, collection, addDoc, deleteDoc, doc, onSnapshot, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+import { getFirestore, collection, addDoc, doc, onSnapshot, query, orderBy, serverTimestamp, increment, writeBatch, getDocs } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCAyKcFsblntjAqSD58Q15a1ZHDjjRpsMw",
@@ -57,7 +95,16 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const $ = id => document.getElementById(id);
-let unsub = null, entries = [];
+const show = (id, v) => $(id).style.display = v ? "block" : "none";
+const money = n => Number(n).toLocaleString("en-IN");
+const esc = t => String(t ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+let accounts = [], txns = [], cur = null, unsubA = null, unsubT = null, txType = "gave";
+
+const uid = () => auth.currentUser.uid;
+const accCol = () => collection(db, "users", uid(), "accounts");
+const accRef = id => doc(db, "users", uid(), "accounts", id);
+const txCol = () => collection(db, "users", uid(), "accounts", cur, "txns");
+const curAcc = () => accounts.find(x => x.id === cur);
 
 $("loginBtn").onclick = async () => {
   try { await signInWithPopup(auth, new GoogleAuthProvider()); }
@@ -66,54 +113,163 @@ $("loginBtn").onclick = async () => {
 $("logoutBtn").onclick = () => signOut(auth);
 
 onAuthStateChanged(auth, user => {
-  if (unsub) unsub();
+  if (unsubA) unsubA();
+  if (unsubT) unsubT();
+  cur = null;
   if (!user) {
-    $("login").style.display = "block";
-    $("app").style.display = "none";
+    show("login", true); show("home", false); show("acc", false);
+    $("logoutBtn").style.display = "none";
     return;
   }
-  $("login").style.display = "none";
-  $("app").style.display = "block";
-  $("user").textContent = user.displayName;
-  const q = query(collection(db, "users", user.uid, "entries"), orderBy("createdAt", "desc"));
-  unsub = onSnapshot(q, snap => {
-    entries = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    render();
+  show("login", false); show("home", true); show("acc", false);
+  $("logoutBtn").style.display = "block";
+  unsubA = onSnapshot(query(accCol(), orderBy("name")), snap => {
+    accounts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderHome();
+    if (cur) renderAcc();
   });
 });
 
-async function add(type) {
-  const user = auth.currentUser;
-  const name = $("name").value.trim();
-  const amount = parseFloat($("amount").value);
-  if (!name || !amount) return alert("Enter name and amount");
-  await addDoc(collection(db, "users", user.uid, "entries"), {
-    name, amount, type, note: $("note").value.trim(), createdAt: serverTimestamp()
-  });
-  $("name").value = ""; $("amount").value = ""; $("note").value = "";
+function renderHome() {
+  let get = 0, give = 0;
+  accounts.forEach(a => { const b = a.balance || 0; if (b > 0) get += b; else give -= b; });
+  $("get").textContent = money(get);
+  $("give").textContent = money(give);
+  const s = $("search").value.toLowerCase(), c = $("catFilter").value;
+  const cats = [...new Set(accounts.map(a => a.category).filter(Boolean))];
+  $("catFilter").innerHTML = '<option value="">All categories</option>' +
+    cats.map(x => `<option ${x === c ? "selected" : ""}>${esc(x)}</option>`).join("");
+  $("list").innerHTML = accounts
+    .filter(a => (!s || a.name.toLowerCase().includes(s)) && (!c || a.category === c))
+    .map(a => {
+      const b = a.balance || 0;
+      return `<div class="card row" data-open="${a.id}"><div><b>${esc(a.name)}</b><br><small>${esc(a.category || "")}</small></div>
+      <div style="text-align:right" class="${b > 0 ? "green" : b < 0 ? "red" : ""}"><b>${money(Math.abs(b))}</b><br><small>${b > 0 ? "Due" : b < 0 ? "Advance" : "Settled"}</small></div></div>`;
+    }).join("") || "<small>No accounts yet. Tap + Add Account</small>";
 }
-$("addCredit").onclick = () => add("credit");
-$("addDebit").onclick = () => add("debit");
-$("search").oninput = render;
+$("search").oninput = renderHome;
+$("catFilter").onchange = renderHome;
+$("list").onclick = e => {
+  const el = e.target.closest("[data-open]");
+  if (el) openAcc(el.dataset.open);
+};
 
-function render() {
-  const s = $("search").value.toLowerCase();
-  let cr = 0, dr = 0, html = "";
-  entries.forEach(e => {
-    if (e.type === "credit") cr += e.amount; else dr += e.amount;
-    if (s && !e.name.toLowerCase().includes(s)) return;
-    html += `<div class="card row"><div><b>${esc(e.name)}</b><br><small>${esc(e.note || "")}</small></div>
-      <div><span class="${e.type}">${e.type === "credit" ? "+" : "-"}${e.amount}</span>
-      <button data-id="${e.id}" style="background:#999;margin-left:8px">X</button></div></div>`;
+$("newAccBtn").onclick = () => show("addAcc", true);
+$("cancelAcc").onclick = () => show("addAcc", false);
+$("saveAcc").onclick = async () => {
+  const name = $("aName").value.trim();
+  if (!name) return alert("Enter name");
+  await addDoc(accCol(), { name, phone: $("aPhone").value.trim(), category: $("aCat").value.trim(), balance: 0, createdAt: serverTimestamp() });
+  $("aName").value = ""; $("aPhone").value = ""; $("aCat").value = "";
+  show("addAcc", false);
+};
+
+function openAcc(id) {
+  cur = id;
+  show("home", false); show("acc", true); show("txForm", false);
+  if (unsubT) unsubT();
+  unsubT = onSnapshot(query(txCol(), orderBy("createdAt", "desc")), snap => {
+    txns = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderAcc();
   });
-  $("list").innerHTML = html;
-  $("cr").textContent = cr; $("dr").textContent = dr; $("bal").textContent = cr - dr;
-  document.querySelectorAll("[data-id]").forEach(b => b.onclick = () => {
-    if (confirm("Delete this entry?"))
-      deleteDoc(doc(db, "users", auth.currentUser.uid, "entries", b.dataset.id));
-  });
+  renderAcc();
 }
-function esc(t) { return String(t).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function closeAcc() {
+  cur = null;
+  if (unsubT) unsubT();
+  show("acc", false); show("home", true);
+}
+$("back").onclick = closeAcc;
+
+function renderAcc() {
+  const a = curAcc();
+  if (!a) return closeAcc();
+  const b = a.balance || 0;
+  $("accName").textContent = a.name;
+  $("accBal").textContent = money(Math.abs(b));
+  $("accBal").className = "big " + (b > 0 ? "green" : b < 0 ? "red" : "");
+  $("accStatus").textContent = b > 0 ? "Due (they owe you)" : b < 0 ? "Advance (you owe them)" : "Settled";
+  $("txList").innerHTML = txns.map(t => `<div class="card row"><div>
+    <b class="${t.type === "gave" ? "red" : "green"}">${t.type === "gave" ? "You Gave" : "You Got"} ${money(t.amount)}</b><br>
+    <small>${esc(t.date)} ${esc(t.note)}</small></div>
+    <div><button class="grey" data-edit="${t.id}">✏️</button> <button class="grey" data-del="${t.id}">🗑</button></div></div>`).join("");
+}
+
+function openTx(type) {
+  txType = type;
+  $("txTitle").textContent = type === "gave" ? "You Gave" : "You Got";
+  $("tDate").value = new Date().toISOString().slice(0, 10);
+  show("txForm", true);
+}
+$("gaveBtn").onclick = () => openTx("gave");
+$("gotBtn").onclick = () => openTx("got");
+$("cancelTx").onclick = () => show("txForm", false);
+$("saveTx").onclick = async () => {
+  const amt = parseFloat($("tAmount").value);
+  if (!amt || amt <= 0) return alert("Enter amount");
+  const b = writeBatch(db);
+  b.set(doc(txCol()), { amount: amt, type: txType, note: $("tNote").value.trim(), date: $("tDate").value, createdAt: serverTimestamp() });
+  b.update(accRef(cur), { balance: increment(txType === "gave" ? amt : -amt) });
+  await b.commit();
+  $("tAmount").value = ""; $("tNote").value = "";
+  show("txForm", false);
+};
+
+$("txList").onclick = async e => {
+  const del = e.target.closest("[data-del]"), ed = e.target.closest("[data-edit]");
+  if (del) {
+    const t = txns.find(x => x.id === del.dataset.del);
+    if (!confirm("Delete this entry?")) return;
+    const b = writeBatch(db);
+    b.delete(doc(txCol(), t.id));
+    b.update(accRef(cur), { balance: increment(t.type === "gave" ? -t.amount : t.amount) });
+    await b.commit();
+  }
+  if (ed) {
+    const t = txns.find(x => x.id === ed.dataset.edit);
+    const v = prompt("New amount", t.amount);
+    if (v === null) return;
+    const n = parseFloat(v);
+    if (!n || n <= 0) return alert("Invalid amount");
+    const note = prompt("Note", t.note || "");
+    const b = writeBatch(db);
+    b.update(doc(txCol(), t.id), { amount: n, note: note ?? t.note ?? "" });
+    b.update(accRef(cur), { balance: increment((t.type === "gave" ? 1 : -1) * (n - t.amount)) });
+    await b.commit();
+  }
+};
+
+$("delAcc").onclick = async () => {
+  if (!confirm("Delete this account and all its entries?")) return;
+  const id = cur;
+  const snap = await getDocs(txCol());
+  const b = writeBatch(db);
+  snap.forEach(d => b.delete(d.ref));
+  b.delete(accRef(id));
+  await b.commit();
+  closeAcc();
+};
+
+$("call").onclick = () => {
+  const a = curAcc();
+  if (!a.phone) return alert("Add a phone number first");
+  location.href = "tel:" + a.phone;
+};
+$("remind").onclick = () => {
+  const a = curAcc(), b = a.balance || 0;
+  if (!a.phone) return alert("Add a phone number first");
+  const msg = `Hello ${a.name}, your pending balance is ${money(Math.abs(b))}. Please pay soon. Thank you.`;
+  window.open("https://wa.me/" + a.phone.replace(/\D/g, "") + "?text=" + encodeURIComponent(msg));
+};
+$("export").onclick = () => {
+  const a = curAcc();
+  let csv = "Date,Type,Amount,Note\n";
+  [...txns].reverse().forEach(t => csv += `${t.date},${t.type === "gave" ? "You Gave" : "You Got"},${t.amount},"${(t.note || "").replace(/"/g, '""')}"\n`);
+  const l = document.createElement("a");
+  l.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+  l.download = a.name + ".csv";
+  l.click();
+};
 </script>
 </body>
 </html>
