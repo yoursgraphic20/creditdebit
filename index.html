@@ -1,1 +1,119 @@
 <!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Credit Debit</title>
+<style>
+body{font-family:sans-serif;max-width:480px;margin:0 auto;padding:16px;background:#f4f6fb}
+button{padding:10px 14px;border:0;border-radius:8px;background:#1a56db;color:#fff;font-size:16px}
+input{padding:10px;margin:4px 0;width:100%;box-sizing:border-box;font-size:16px}
+.card{background:#fff;padding:12px;border-radius:10px;margin:8px 0}
+.credit{color:green}.debit{color:red}
+.row{display:flex;justify-content:space-between;align-items:center}
+#bal{font-size:28px;font-weight:bold}
+</style>
+</head>
+<body>
+<h2>Credit Debit</h2>
+
+<div id="login" class="card">
+  <button id="loginBtn">Sign in with Google</button>
+</div>
+
+<div id="app" style="display:none">
+  <div class="row"><span id="user"></span><button id="logoutBtn">Logout</button></div>
+  <div class="card">Balance<div id="bal">0</div>
+    <small>Credit: <span id="cr">0</span> | Debit: <span id="dr">0</span></small>
+  </div>
+  <div class="card">
+    <input id="name" placeholder="Name">
+    <input id="amount" type="number" placeholder="Amount">
+    <input id="note" placeholder="Note (optional)">
+    <div class="row">
+      <button id="addCredit">+ Credit</button>
+      <button id="addDebit" style="background:#dc2626">- Debit</button>
+    </div>
+  </div>
+  <input id="search" placeholder="Search name...">
+  <div id="list"></div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+import { getFirestore, collection, addDoc, deleteDoc, doc, onSnapshot, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCAyKcFsblntjAqSD58Q15a1ZHDjjRpsMw",
+  authDomain: "creditdebit-app-a33c8.firebaseapp.com",
+  projectId: "creditdebit-app-a33c8",
+  storageBucket: "creditdebit-app-a33c8.firebasestorage.app",
+  messagingSenderId: "782522431758",
+  appId: "1:782522431758:web:677034a42d3a62f91eff5f"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const $ = id => document.getElementById(id);
+let unsub = null, entries = [];
+
+$("loginBtn").onclick = async () => {
+  try { await signInWithPopup(auth, new GoogleAuthProvider()); }
+  catch (e) { alert("Login error: " + e.message); }
+};
+$("logoutBtn").onclick = () => signOut(auth);
+
+onAuthStateChanged(auth, user => {
+  if (unsub) unsub();
+  if (!user) {
+    $("login").style.display = "block";
+    $("app").style.display = "none";
+    return;
+  }
+  $("login").style.display = "none";
+  $("app").style.display = "block";
+  $("user").textContent = user.displayName;
+  const q = query(collection(db, "users", user.uid, "entries"), orderBy("createdAt", "desc"));
+  unsub = onSnapshot(q, snap => {
+    entries = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    render();
+  });
+});
+
+async function add(type) {
+  const user = auth.currentUser;
+  const name = $("name").value.trim();
+  const amount = parseFloat($("amount").value);
+  if (!name || !amount) return alert("Enter name and amount");
+  await addDoc(collection(db, "users", user.uid, "entries"), {
+    name, amount, type, note: $("note").value.trim(), createdAt: serverTimestamp()
+  });
+  $("name").value = ""; $("amount").value = ""; $("note").value = "";
+}
+$("addCredit").onclick = () => add("credit");
+$("addDebit").onclick = () => add("debit");
+$("search").oninput = render;
+
+function render() {
+  const s = $("search").value.toLowerCase();
+  let cr = 0, dr = 0, html = "";
+  entries.forEach(e => {
+    if (e.type === "credit") cr += e.amount; else dr += e.amount;
+    if (s && !e.name.toLowerCase().includes(s)) return;
+    html += `<div class="card row"><div><b>${esc(e.name)}</b><br><small>${esc(e.note || "")}</small></div>
+      <div><span class="${e.type}">${e.type === "credit" ? "+" : "-"}${e.amount}</span>
+      <button data-id="${e.id}" style="background:#999;margin-left:8px">X</button></div></div>`;
+  });
+  $("list").innerHTML = html;
+  $("cr").textContent = cr; $("dr").textContent = dr; $("bal").textContent = cr - dr;
+  document.querySelectorAll("[data-id]").forEach(b => b.onclick = () => {
+    if (confirm("Delete this entry?"))
+      deleteDoc(doc(db, "users", auth.currentUser.uid, "entries", b.dataset.id));
+  });
+}
+function esc(t) { return String(t).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+</script>
+</body>
+</html>
