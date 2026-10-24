@@ -12,6 +12,20 @@ header{background:#1a56db;color:#fff;padding:14px 16px;display:flex;justify-cont
 main{padding:12px 12px 90px}
 button{padding:10px 14px;border:0;border-radius:8px;background:#1a56db;color:#fff;font-size:15px}
 input,select{padding:10px;margin:4px 0;width:100%;font-size:16px;border:1px solid #ccc;border-radius:8px}
+.card{background:#fff;padding:12px;border<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#1a56db">
+<title>Credit Debit</title>
+<style>
+*{box-sizing:border-box}
+body{font-family:sans-serif;margin:0 auto;background:#f4f6fb;max-width:520px}
+header{background:#1a56db;color:#fff;padding:14px 16px;display:flex;justify-content:space-between;align-items:center}
+main{padding:12px 12px 90px}
+button{padding:10px 14px;border:0;border-radius:8px;background:#1a56db;color:#fff;font-size:15px}
+input,select{padding:10px;margin:4px 0;width:100%;font-size:16px;border:1px solid #ccc;border-radius:8px}
 .card{background:#fff;padding:12px;border-radius:10px;margin:8px 0}
 .row{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .red{color:#dc2626}.green{color:#16a34a}
@@ -41,6 +55,7 @@ small{color:#666}
 
   <div id="addAcc" class="card" style="display:none">
     <b>New account</b>
+    <button id="pickContact" class="grey" style="width:100%;margin:6px 0">📇 Pick from contacts</button>
     <input id="aName" placeholder="Name (customer / supplier)">
     <input id="aPhone" placeholder="Phone with country code, e.g. 919876543210" type="tel">
     <input id="aCat" placeholder="Category (customer, supplier, shop...)">
@@ -69,7 +84,7 @@ small{color:#666}
     <b id="txTitle"></b>
     <input id="tAmount" type="number" placeholder="Amount">
     <input id="tNote" placeholder="Note (optional)">
-    <input id="tDate" type="date">
+    <input id="tDate" type="datetime-local">
     <div class="row"><button id="saveTx">Save</button><button id="cancelTx" class="grey">Cancel</button></div>
   </div>
   <div id="txList"></div>
@@ -98,6 +113,7 @@ const $ = id => document.getElementById(id);
 const show = (id, v) => $(id).style.display = v ? "block" : "none";
 const money = n => Number(n).toLocaleString("en-IN");
 const esc = t => String(t ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmt = d => d ? new Date(d).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
 let accounts = [], txns = [], cur = null, unsubA = null, unsubT = null, txType = "gave";
 
 const uid = () => auth.currentUser.uid;
@@ -156,6 +172,16 @@ $("list").onclick = e => {
 
 $("newAccBtn").onclick = () => show("addAcc", true);
 $("cancelAcc").onclick = () => show("addAcc", false);
+$("pickContact").onclick = async () => {
+  if (!("contacts" in navigator && "ContactsManager" in window))
+    return alert("Contact picker is not supported on this device. Use Chrome on an Android phone.");
+  try {
+    const [c] = await navigator.contacts.select(["name", "tel"], { multiple: false });
+    if (!c) return;
+    $("aName").value = (c.name && c.name[0]) || "";
+    $("aPhone").value = ((c.tel && c.tel[0]) || "").replace(/[^\d+]/g, "");
+  } catch (e) { alert("Could not open contacts: " + e.message); }
+};
 $("saveAcc").onclick = async () => {
   const name = $("aName").value.trim();
   if (!name) return alert("Enter name");
@@ -168,7 +194,7 @@ function openAcc(id) {
   cur = id;
   show("home", false); show("acc", true); show("txForm", false);
   if (unsubT) unsubT();
-  unsubT = onSnapshot(query(txCol(), orderBy("createdAt", "desc")), snap => {
+  unsubT = onSnapshot(query(txCol(), orderBy("date", "desc")), snap => {
     txns = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     renderAcc();
   });
@@ -191,14 +217,15 @@ function renderAcc() {
   $("accStatus").textContent = b > 0 ? "Due (they owe you)" : b < 0 ? "Advance (you owe them)" : "Settled";
   $("txList").innerHTML = txns.map(t => `<div class="card row"><div>
     <b class="${t.type === "gave" ? "red" : "green"}">${t.type === "gave" ? "You Gave" : "You Got"} ${money(t.amount)}</b><br>
-    <small>${esc(t.date)} ${esc(t.note)}</small></div>
+    <small>${esc(fmt(t.date))} ${esc(t.note)}</small></div>
     <div><button class="grey" data-edit="${t.id}">✏️</button> <button class="grey" data-del="${t.id}">🗑</button></div></div>`).join("");
 }
 
 function openTx(type) {
   txType = type;
   $("txTitle").textContent = type === "gave" ? "You Gave" : "You Got";
-  $("tDate").value = new Date().toISOString().slice(0, 10);
+  const n = new Date(); n.setMinutes(n.getMinutes() - n.getTimezoneOffset());
+  $("tDate").value = n.toISOString().slice(0, 16);
   show("txForm", true);
 }
 $("gaveBtn").onclick = () => openTx("gave");
@@ -229,6 +256,50 @@ $("txList").onclick = async e => {
     const t = txns.find(x => x.id === ed.dataset.edit);
     const v = prompt("New amount", t.amount);
     if (v === null) return;
+    const n = parseFloat(v);
+    if (!n || n <= 0) return alert("Invalid amount");
+    const note = prompt("Note", t.note || "");
+    const b = writeBatch(db);
+    b.update(doc(txCol(), t.id), { amount: n, note: note ?? t.note ?? "" });
+    b.update(accRef(cur), { balance: increment((t.type === "gave" ? 1 : -1) * (n - t.amount)) });
+    await b.commit();
+  }
+};
+
+$("delAcc").onclick = async () => {
+  if (!confirm("Delete this account and all its entries?")) return;
+  const id = cur;
+  const snap = await getDocs(txCol());
+  const b = writeBatch(db);
+  snap.forEach(d => b.delete(d.ref));
+  b.delete(accRef(id));
+  await b.commit();
+  closeAcc();
+};
+
+$("call").onclick = () => {
+  const a = curAcc();
+  if (!a.phone) return alert("Add a phone number first");
+  location.href = "tel:" + a.phone;
+};
+$("remind").onclick = () => {
+  const a = curAcc(), b = a.balance || 0;
+  if (!a.phone) return alert("Add a phone number first");
+  const msg = `Hello ${a.name}, your pending balance is ${money(Math.abs(b))}. Please pay soon. Thank you.`;
+  window.open("https://wa.me/" + a.phone.replace(/\D/g, "") + "?text=" + encodeURIComponent(msg));
+};
+$("export").onclick = () => {
+  const a = curAcc();
+  let csv = "Date,Type,Amount,Note\n";
+  [...txns].reverse().forEach(t => csv += `${t.date},${t.type === "gave" ? "You Gave" : "You Got"},${t.amount},"${(t.note || "").replace(/"/g, '""')}"\n`);
+  const l = document.createElement("a");
+  l.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+  l.download = a.name + ".csv";
+  l.click();
+};
+</script>
+</body>
+</html>=== null) return;
     const n = parseFloat(v);
     if (!n || n <= 0) return alert("Invalid amount");
     const note = prompt("Note", t.note || "");
