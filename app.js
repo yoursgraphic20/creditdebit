@@ -18,12 +18,17 @@ const $ = id => document.getElementById(id);
 const money = n => Number(n).toLocaleString("en-IN");
 const esc = t => String(t ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const fmt = d => d ? new Date(d).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+const fmtL = d => {
+  if (!d) return "";
+  const x = new Date(d);
+  return x.toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", year: "numeric" }) + " " + x.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+};
 const nowLocal = () => { const n = new Date(); n.setMinutes(n.getMinutes() - n.getTimezoneOffset()); return n.toISOString().slice(0, 16); };
 const color = s => { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) % 360; return `linear-gradient(135deg,hsl(${h},70%,55%),hsl(${(h + 40) % 360},70%,42%))`; };
 const initial = s => (s || "?").trim().charAt(0).toUpperCase();
 
 let accounts = [], txns = [], cash = [], allTx = [];
-let cur = null, unsubA = null, unsubT = null, unsubC = null, filter = "all", catSel = "";
+let cur = null, unsubA = null, unsubT = null, unsubC = null, filter = "all", catSel = "", period = "all";
 
 /* theme (dark by default) */
 function setTheme(t) {
@@ -129,10 +134,14 @@ onAuthStateChanged(auth, user => {
 function renderHome() {
   let due = 0, adv = 0;
   accounts.forEach(a => { const b = a.balance || 0; if (b > 0) due += b; else adv -= b; });
+  const bal = due - adv;
+  const balTxt = (bal < 0 ? "-" : "") + money(Math.abs(bal));
   $("sDue").textContent = money(due);
   $("sAdv").textContent = money(adv);
-  const bal = due - adv;
-  $("sBal").textContent = (bal < 0 ? "-" : "") + money(Math.abs(bal));
+  $("sBal").textContent = balTxt;
+  $("dDue").textContent = money(due);
+  $("dAdv").textContent = money(adv);
+  $("dBal").textContent = balTxt;
   const cats = [...new Set(accounts.map(a => a.category).filter(Boolean))];
   if (catSel && !cats.includes(catSel)) catSel = "";
   const chips = [["all", "All"], ["due", "Due"], ["advance", "Advance"], ["settled", "Settled"], ["cat", (catSel || "Category") + " ▾"]];
@@ -205,6 +214,7 @@ $("addBtn").onclick = () => {
 /* account page */
 function openAcc(id) {
   cur = id;
+  period = "all";
   if (unsubT) unsubT();
   view("acc");
   unsubT = onSnapshot(query(txCol(), orderBy("date", "desc")), snap => {
@@ -212,6 +222,15 @@ function openAcc(id) {
     renderAcc();
   });
   renderAcc();
+}
+function inPeriod(d) {
+  if (period === "all" || !d) return true;
+  const x = new Date(d), n = new Date();
+  if (period === "daily") return x.toDateString() === n.toDateString();
+  if (period === "weekly") return n - x <= 7 * 864e5;
+  if (period === "monthly") return x.getMonth() === n.getMonth() && x.getFullYear() === n.getFullYear();
+  if (period === "yearly") return x.getFullYear() === n.getFullYear();
+  return true;
 }
 function renderAcc() {
   const a = curAcc();
@@ -222,19 +241,38 @@ function renderAcc() {
   $("accCat").textContent = a.category || "";
   $("accBal").textContent = money(Math.abs(b));
   $("accStatus").textContent = b > 0 ? "Due: they owe you" : b < 0 ? "Advance: you owe them" : "All settled";
-  $("txList").innerHTML = txns.map(t => `<div class="tx">
-    <div class="dot ${t.type}">${t.type === "gave" ? "↑" : "↓"}</div>
-    <div class="tm"><b>${t.type === "gave" ? "You Gave" : "You Got"}</b><small>${esc(fmt(t.date))}</small>${t.note ? `<small>${esc(t.note)}</small>` : ""}</div>
-    <div class="ta ${t.type === "gave" ? "red" : "green"}">${money(t.amount)}</div>
-    <div><button class="ib2" data-edit="${t.id}">✏️</button><button class="ib2" data-del="${t.id}">🗑</button></div></div>`).join("")
-    || `<div class="empty">📝<br>No entries yet.<br>Use the buttons below.</div>`;
+
+  let run = 0;
+  const rb = {};
+  [...txns].reverse().forEach(t => { run += t.type === "gave" ? t.amount : -t.amount; rb[t.id] = run; });
+  const list = txns.filter(t => inPeriod(t.date));
+  let rec = 0, giv = 0;
+  list.forEach(t => { if (t.type === "gave") giv += t.amount; else rec += t.amount; });
+
+  $("tCount").textContent = list.length;
+  $("tRec").textContent = money(rec);
+  $("tGiv").textContent = money(giv);
+  $("tBal").textContent = money(Math.abs(b)) + (b > 0 ? " Due" : b < 0 ? " Advance" : "");
+  $("tBal").className = b > 0 ? "red" : b < 0 ? "green" : "";
+  $("pChips").innerHTML = [["all", "All"], ["daily", "Daily"], ["weekly", "Weekly"], ["monthly", "Monthly"], ["yearly", "Yearly"]]
+    .map(([k, l]) => `<button class="chip ${k === period ? "on" : ""}" data-p="${k}">${l}</button>`).join("");
+  $("txList").innerHTML = list.map(t => {
+    const r = rb[t.id] || 0;
+    return `<div class="tr" data-tx="${t.id}">
+      <span class="dt">${esc(fmtL(t.date))}${t.note ? `<span class="nt">${esc(t.note)}</span>` : ""}</span>
+      <span class="gr green">${t.type === "got" ? money(t.amount) : ""}</span>
+      <span class="rd red">${t.type === "gave" ? money(t.amount) : ""}</span>
+      <span class="bc ${r > 0 ? "red" : r < 0 ? "green" : ""}">${r < 0 ? "-" : ""}${money(Math.abs(r))}</span></div>`;
+  }).join("") || `<div class="empty">📝<br>No entries here.<br>Use the buttons below.</div>`;
 }
+$("pChips").onclick = e => { const c = e.target.closest("[data-p]"); if (c) { period = c.dataset.p; renderAcc(); } };
+$("balTog").onchange = () => $("tbl").classList.toggle("nobal", !$("balTog").checked);
 
 function txSheet(type, t) {
   const edit = !!t;
   let dv = edit ? (t.date || "") : nowLocal();
   if (dv.length === 10) dv += "T00:00";
-  openSheet(`<h3 class="${type === "gave" ? "red" : "green"}">${edit ? "Edit entry" : type === "gave" ? "You Gave" : "You Got"}</h3>
+  openSheet(`<h3 class="${type === "gave" ? "red" : "green"}">${edit ? "Edit entry" : type === "gave" ? "You Gave" : "You Received"}</h3>
     <input id="tAmount" class="bigin" type="number" inputmode="decimal" placeholder="0" value="${edit ? t.amount : ""}">
     <label>Note</label><input id="tNote" placeholder="Optional" value="${esc(edit ? t.note : "")}">
     <label>Date and time</label><input id="tDate" type="datetime-local" value="${dv}">
@@ -261,18 +299,21 @@ $("gaveBtn").onclick = () => txSheet("gave");
 $("gotBtn").onclick = () => txSheet("got");
 
 $("txList").onclick = e => {
-  const del = e.target.closest("[data-del]"), ed = e.target.closest("[data-edit]");
-  if (ed) { const t = txns.find(x => x.id === ed.dataset.edit); txSheet(t.type, t); }
-  if (del) {
-    const t = txns.find(x => x.id === del.dataset.del);
-    confirmBox("Delete this entry?", "Delete", async () => {
-      const b = writeBatch(db);
-      b.delete(doc(txCol(), t.id));
-      b.update(accRef(cur), { balance: increment(t.type === "gave" ? -t.amount : t.amount) });
-      await b.commit();
-      toast("Entry deleted");
-    });
-  }
+  const row = e.target.closest("[data-tx]");
+  if (!row) return;
+  const t = txns.find(x => x.id === row.dataset.tx);
+  if (!t) return;
+  openSheet(`<h3 class="${t.type === "gave" ? "red" : "green"}">${t.type === "gave" ? "You Gave" : "You Received"} ${money(t.amount)}</h3>
+    <small>${esc(fmtL(t.date))}</small>
+    <div class="two"><button class="btn ghost" id="ed">✏️ Edit</button><button class="btn red" id="rm">🗑 Delete</button></div>`);
+  $("ed").onclick = () => txSheet(t.type, t);
+  $("rm").onclick = () => confirmBox("Delete this entry?", "Delete", async () => {
+    const b = writeBatch(db);
+    b.delete(doc(txCol(), t.id));
+    b.update(accRef(cur), { balance: increment(t.type === "gave" ? -t.amount : t.amount) });
+    await b.commit();
+    toast("Entry deleted");
+  });
 };
 $("delBtn").onclick = () => confirmBox("Delete this customer and all entries?", "Delete", async () => {
   const id = cur;
@@ -298,7 +339,7 @@ $("remind").onclick = () => remindAcc(curAcc());
 $("export").onclick = () => {
   const a = curAcc();
   let csv = "Date,Type,Amount,Note\n";
-  [...txns].reverse().forEach(t => csv += `${t.date},${t.type === "gave" ? "You Gave" : "You Got"},${t.amount},"${(t.note || "").replace(/"/g, '""')}"\n`);
+  [...txns].reverse().forEach(t => csv += `${t.date},${t.type === "gave" ? "You Gave" : "You Received"},${t.amount},"${(t.note || "").replace(/"/g, '""')}"\n`);
   download(a.name + ".csv", csv);
 };
 
@@ -316,7 +357,7 @@ async function openTxs() {
   $("txCount").textContent = allTx.length;
   $("txsList").innerHTML = allTx.map(t => `<div class="tx" data-acc="${t.acc.id}">
     <div class="dot ${t.type}">${t.type === "gave" ? "↑" : "↓"}</div>
-    <div class="tm"><b>${esc(t.acc.name)}</b><small>${t.type === "gave" ? "You Gave" : "You Got"} · ${esc(fmt(t.date))}</small>${t.note ? `<small>${esc(t.note)}</small>` : ""}</div>
+    <div class="tm"><b>${esc(t.acc.name)}</b><small>${t.type === "gave" ? "You Gave" : "You Received"} · ${esc(fmt(t.date))}</small>${t.note ? `<small>${esc(t.note)}</small>` : ""}</div>
     <div class="ta ${t.type === "gave" ? "red" : "green"}">${money(t.amount)}</div></div>`).join("")
     || `<div class="empty">🧾<br>No transactions yet.</div>`;
 }
