@@ -98,7 +98,7 @@ function view(name) {
   $("menuBtn").hidden = !home; $("searchBtn").hidden = !home;
   $("bellBtn").hidden = !home; $("moreBtn").hidden = !home;
   $("backBtn").hidden = !sub; $("delBtn").hidden = name !== "acc";
-  $("title").textContent = name === "txs" ? "Transactions" : name === "cash" ? "Cash Book" : name === "acc" ? (curAcc() ? curAcc().name : "") : "Credit Debit";
+  $("title").textContent = name === "txs" ? "Transactions" : name === "cash" ? "Cash Book" : name === "acc" ? (curAcc() ? curAcc().name : "") : "Daily Transactions";
 }
 function goHome() {
   cur = null;
