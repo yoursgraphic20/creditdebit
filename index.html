@@ -1,22 +1,23 @@
 <!DOCTYPE html>
-<link rel="stylesheet" href="style2.css">
 <html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#070b1a">
-<title>Credit Debit</title>
+<title>Daily Transactions</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="style2.css">
+<link rel="manifest" href="manifest.json">
+<script>if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js")</script>
 </head>
 <body>
 <header>
   <button class="ib" id="menuBtn" hidden>☰</button>
   <button class="ib" id="backBtn" hidden>←</button>
-  <span id="title">Credit Debit</span>
+  <span id="title">Daily Transactions</span>
   <button class="ib" id="searchBtn" hidden>🔍</button>
   <button class="ib" id="bellBtn" hidden>🔔</button>
   <button class="ib" id="delBtn" hidden>🗑</button>
@@ -26,7 +27,7 @@
 <main>
   <section id="login" class="login">
     <div class="logo">📒</div>
-    <h2>Credit Debit</h2>
+    <h2>Daily Transactions</h2>
     <p style="color:var(--sub);margin:0 0 22px">Your digital ledger.<br>Safe in your own Google account.</p>
     <button class="btn full" id="loginBtn">Continue with Google</button>
   </section>
