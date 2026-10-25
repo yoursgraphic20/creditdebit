@@ -9,6 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style2.css">
 </head>
 <body>
 <header>
@@ -55,7 +56,15 @@
         <button id="export">📄 Export</button>
       </div>
     </div>
-    <div id="txList"></div>
+    <div class="trow">
+      <b>Transactions <span id="tCount">0</span></b>
+      <label class="tg">Balance <input type="checkbox" id="balTog" checked><span class="sw"></span></label>
+    </div>
+    <div class="chips" id="pChips"></div>
+    <div class="tbl" id="tbl">
+      <div class="th"><span>Date</span><span class="gr green">Received</span><span class="rd red">Gave</span><span class="bc">Balance</span></div>
+      <div id="txList"></div>
+    </div>
   </section>
 
   <section id="txs" hidden>
@@ -80,6 +89,11 @@
     <button class="btn soft" id="txBtn">☰ Transactions</button>
     <button class="btn" id="addBtn">👤＋ Add Customer</button>
   </div>
+  <div class="sum">
+    <div><small>Total Advance</small><b class="green" id="dAdv">0</b></div>
+    <div><small>Total Due</small><b class="red" id="dDue">0</b></div>
+    <div><small>Balance</small><b id="dBal">0</b></div>
+  </div>
   <nav class="nav">
     <button id="nTransfer"><i>⇄</i>Transfer</button>
     <button id="nCash"><i>💵</i>Cash Book</button>
@@ -89,12 +103,21 @@
 </div>
 
 <div class="bar" id="bar" hidden>
-  <button class="btn red" id="gaveBtn">You Gave</button>
-  <button class="btn grn" id="gotBtn">You Got</button>
+  <div class="acts">
+    <button class="btn grn" id="gotBtn">You Received</button>
+    <button class="btn red" id="gaveBtn">You Gave</button>
+  </div>
+  <div class="sum">
+    <div><small>Total Received</small><b class="green" id="tRec">0</b></div>
+    <div><small>Total Given</small><b class="red" id="tGiv">0</b></div>
+    <div><small>Balance</small><b id="tBal">0</b></div>
+  </div>
 </div>
 <div class="bar" id="cbar" hidden>
-  <button class="btn grn" id="cashIn">Cash In</button>
-  <button class="btn red" id="cashOut">Cash Out</button>
+  <div class="acts">
+    <button class="btn grn" id="cashIn">Cash In</button>
+    <button class="btn red" id="cashOut">Cash Out</button>
+  </div>
 </div>
 
 <div class="dov" id="dov"><aside id="drawer">
