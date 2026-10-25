@@ -1,0 +1,23 @@
+main{padding-bottom:270px}
+.bar{display:block}
+.bar button{max-width:none}
+.sum{display:flex;gap:8px;margin-top:10px;margin-bottom:6px}
+.sum div{flex:1;text-align:center;background:var(--inp);border:1px solid var(--line);border-radius:14px;padding:8px 4px}
+.sum small{display:block}
+.sum b{display:block;font-size:17px;font-weight:800;margin-top:2px}
+.trow{display:flex;justify-content:space-between;align-items:center;margin:14px 2px 8px;font-size:15px}
+.tg{display:flex;align-items:center;gap:8px;font-weight:600;font-size:14px}
+.tg input{display:none}
+.sw{width:42px;height:24px;border-radius:14px;background:var(--line);position:relative;transition:.2s}
+.sw::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:.2s}
+.tg input:checked+.sw{background:var(--pri)}
+.tg input:checked+.sw::after{left:21px}
+.tbl{background:var(--card);border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:var(--shadow);margin-top:6px}
+.th,.tr{display:grid;grid-template-columns:1.7fr 1fr 1fr 1.1fr;gap:6px;padding:11px 12px;align-items:start}
+.nobal .th,.nobal .tr{grid-template-columns:1.8fr 1fr 1fr}
+.th{background:var(--inp);font-size:12.5px;font-weight:700;color:var(--sub)}
+.th .gr,.th .rd,.th .bc,.tr .gr,.tr .rd,.tr .bc{text-align:right}
+.nobal .bc{display:none}
+.tr{border-top:1px solid var(--line);font-size:14px;font-weight:700;cursor:pointer}
+.tr .dt{font-weight:600;font-size:13px;line-height:1.35}
+.tr .nt{display:block;color:var(--pri);font-size:12.5px;font-weight:600;margin-top:2px}
